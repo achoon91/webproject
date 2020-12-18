@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sist.mapper.movie-mapper">
+  <!-- 
+         resultType => 데이터베이스의 컬럼명과 VO에 있는 변수명이 일치 = default
+         resultMap  => 데이터베이스의 컬럼명과 VO에 있는 변수명이 불일치 
+         TO_CHAR(regdate,'YYYY-MM-DD') as dbday
+                                         ======
+                                         setDbday()
+                                         
+         = private String irum;
+           SELECT name as irum
+         = name
+         while(rs.next())
+         {
+             MovieVO vo=new MovieVO();
+             <result property="name" column="name">
+                     ===============
+                      setName(rs.getString(""))
+             vo.setXxx()
+         }
+   -->
+  <!-- 
+      카테고리별로 페이지 나누기
+   =======
+     1~5
+   -->
+  <select id="movieListData" resultType="MovieVO" parameterType="hashmap">
+    SELECT no,poster,title,num
+    FROM (SELECT no,poster,title,rownum as num
+    FROM (SELECT no,poster,title 
+    FROM daum_movie WHERE cateno=#{cateno} ORDER BY score DESC))
+    WHERE num BETWEEN #{start} AND #{end}
+  </select>
+  <select id="movieTotalPage" resultType="int" parameterType="int">
+    SELECT CEIL(COUNT(*)/12.0) FROM daum_movie
+    WHERE cateno=#{cateno}
+  </select>
+  <!-- 영화 뉴스 -->
+  <select id="movieNewsData" resultType="com.sist.vo.NewsVO" parameterType="hashmap">
+    <!-- Class.forName("com.sist.vo.NewsVO") 
+        private String title;
+	    private String poster;
+	    private String link;
+	    private String content;
+	    private String author;
+    -->
+    SELECT title,poster,link,content,author,num
+    FROM (SELECT title,poster,link,content,author,rownum as num 
+    FROM (SELECT title,poster,link,content,author 
+    FROM daum_news))
+    WHERE num BETWEEN #{start} AND #{end}
+  </select>
+  
+  <select id="newsTotalPage" resultType="int">
+    SELECT CEIL(COUNT(*)/20.0) FROM daum_news
+  </select>
+  
+  <select id="movieTotalData" resultType="MovieVO" parameterType="hashmap">
+    SELECT no,poster,title,num
+    FROM (SELECT no,poster,title,rownum as num
+    FROM (SELECT no,poster,title 
+    FROM daum_movie ORDER BY score DESC))
+    WHERE num BETWEEN #{start} AND #{end}
+  </select>
+  <select id="movieTotalPage2" resultType="int" parameterType="int">
+    SELECT CEIL(COUNT(*)/12.0) FROM daum_movie
+  </select>
+  
+  <!-- 상세보기 
+       hit를 증가 
+       cookie 
+   -->
+  <update id="hitIncrement" parameterType="int">
+    UPDATE daum_movie SET
+    hit=hit+1
+    WHERE no=#{no}
+  </update>
+  <select id="movieDetailData" resultType="MovieVO" parameterType="int">
+    SELECT * FROM daum_movie
+    WHERE no=#{no}
+  </select>
+  
+  <select id="movieReserveData" resultType="MovieVO">
+    SELECT no,title,poster,theater_no 
+    FROM movie_info
+  </select>
+  <!-- 
+      1,2,3,4
+   -->
+  <select id="movieTheaterNo" resultType="String" parameterType="int">
+    SELECT theater_no FROM movie_info
+    WHERE no=#{no}
+  </select>
+  
+  <select id="theaterListData" resultType="com.sist.vo.TheaterVO" parameterType="int">
+    SELECT * FROM theater_info
+    WHERE tno=#{tno}
+  </select>
+  
+  <select id="theaterReserveData" resultType="String" parameterType="int">
+    SELECT rday FROM theater_info
+    WHERE tno=#{tno}
+  </select>
+  
+  <select id="dayTimeData" resultType="String" parameterType="int">
+    SELECT rtime FROM date_info
+    WHERE rday=#{rday}
+  </select>
+  
+  <select id="timeData" resultType="String" parameterType="int">
+    SELECT time FROM time_info
+    WHERE tno=#{tno}
+  </select>
+  <!-- 
+     no NUMBER PRIMARY KEY,
+  id VARCHAR2(20) NOT NULL,
+  mno NUMBER,
+  theater VARCHAR2(100),
+  time VARCHAR2(20),
+  inwon VARCHAR2(20),
+  price VARCHAR2(10),
+  isreserve CHAR(1) DEFAULT 'n',
+  regdate DATE DEFAULT SYSDAT
+   -->
+  <insert id="reserveInsert" parameterType="com.sist.vo.ReserveVO">
+    <selectKey keyProperty="no" resultType="int" order="BEFORE">
+      SELECT NVL(MAX(no)+1,1) as no FROM reserve
+    </selectKey>
+    INSERT INTO reserve VALUES(
+      #{no},
+      #{id},
+      #{mno},
+      #{theater},
+      #{time},
+      #{inwon},
+      #{price},
+      'n',SYSDATE)
+  </insert>
+  <resultMap type="com.sist.vo.ReserveVO" id="reserveList">
+   <result property="no" column="no"/>
+   <result property="id" column="id"/>
+   <result property="theater" column="theater"/>
+   <result property="time" column="time"/>
+   <result property="inwon" column="inwon"/>
+   <result property="price" column="price"/>
+   <result property="isreserve" column="isreserve"/>
+   <result property="mvo.title" column="title"/>
+   <result property="mvo.poster" column="poster"/>
+   <!-- 
+         vo.getMvo().setPoster(rs.getString("poster"));
+    -->
+  </resultMap>
+  <select id="mypageReserveListData" resultMap="reserveList" parameterType="string">
+    SELECT reserve.no,title,poster,theater,time,inwon,price,isreserve
+    FROM reserve,movie_info
+    WHERE mno=movie_info.no AND id=#{id}
+    ORDER BY no DESC
+  </select>
+  <select id="adminReserveListData" resultMap="reserveList">
+    SELECT reserve.no,id,title,poster,theater,time,inwon,price,isreserve
+    FROM reserve,movie_info
+    WHERE mno=movie_info.no AND isreserve='n'
+    ORDER BY no DESC
+  </select>
+  
+  <update id="reserveOk" parameterType="int">
+    UPDATE reserve SET
+    isreserve='y'
+    WHERE no=#{no}
+  </update>
+  
+  <!-- 좋아요 -->
+  <update id="likeIncrement" parameterType="int">
+    UPDATE movie_info SET
+    hit=hit+1
+    WHERE no=#{no}
+  </update>
+  <!-- 찜 저장  -->
+  <insert id="jjimInsert" parameterType="com.sist.vo.JjimVO">
+    INSERT INTO jjim VALUES(
+      (SELECT NVL(MAX(no)+1,1) FROM jjim),#{id},#{mno}
+    )
+  </insert>
+  <!-- 데이터 읽기(찜 목록) -->
+  <select id="jjimListData" parameterType="String" resultType="com.sist.vo.JjimVO">
+    SELECT * FROM jjim
+    WHERE id=#{id}
+    ORDER BY no DESC
+  </select>
+  <!-- 찜여부 확인 -->
+  <select id="jjimCount" parameterType="com.sist.vo.JjimVO" resultType="int">
+    SELECT COUNT(*) FROM jjim
+    WHERE id=#{id} AND mno=#{mno}
+  </select>
+  <!-- 찜 취소시에 처리  -->
+  <delete id="jjimDelete" parameterType="int">
+    DELETE FROM jjim
+    WHERE no=#{no}
+  </delete>
+</mapper>
+
+
+
+
+
+
+
+
+
+
+

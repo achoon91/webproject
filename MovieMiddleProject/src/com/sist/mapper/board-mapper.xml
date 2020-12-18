@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.sist.mapper.board-mapper">
+  <!-- 
+        서브쿼리 => 메인쿼리 
+        단일행
+        WHERE sal = (SEELCT AVG(sal) ~~)
+        
+        ==> 평균 구하기 
+        ==> sal 대입 출력 
+        다중행  WHERE  deptno IN(SELECT deptno FROM dept) ==> 10,20,30,40
+                 deptno=10 OR deptno=20 OR deptno=30..
+                 MAX: ALL MIN: ANY
+         
+        스칼라 SELECT no,(SELECT~)
+   -->
+  <select id="boardListData" resultType="BoardVO" parameterType="hashmap">
+    SELECT no,subject,name,TO_CHAR(regdate,'YYYY-MM-DD') as dbday,hit,num
+    FROM (SELECT no,subject,name,regdate,hit,rownum as num
+    FROM (SELECT no,subject,name,regdate,hit 
+    FROM movie_board ORDER BY no DESC))
+    WHERE num BETWEEN #{start} AND #{end}
+  </select>
+  <!-- 총페이지 -->
+  <select id="boardTotalPage" resultType="int">
+    SELECT CEIL(COUNT(*)/10.0) FROM movie_board
+  </select>
+  <insert id="boardInsert" parameterType="BoardVO">
+    <selectKey keyProperty="no" resultType="int" order="BEFORE">
+     SELECT NVL(MAX(no)+1,1) as no FROM movie_board
+    </selectKey>
+    INSERT INTO movie_board VALUES(
+      #{no},
+      #{name},
+      #{subject},
+      #{content},
+      #{pwd},
+      SYSDATE,
+      0
+    )
+  </insert>
+  <!-- 내용보기  -->
+  <update id="boardHitIncrement" parameterType="int">
+    UPDATE movie_board SET
+    hit=hit+1
+    WHERE no=#{no}
+  </update>
+  <select id="boardDetailData" parameterType="int" resultType="BoardVO">
+    SELECT * FROM movie_board
+    WHERE no=#{no}
+  </select>
+  
+  <!-- 댓글 올리기  -->
+  <insert id="replyInsert" parameterType="ReplyVO">
+    <!-- 적용할 수 없다(한번) -->
+    <selectKey keyProperty="no" resultType="int" order="BEFORE">
+      SELECT NVL(MAX(no)+1,1) as no FROM movie_reply
+    </selectKey>
+    INSERT INTO movie_reply(no,bno,id,name,msg,group_id) VALUES(
+      #{no},
+      #{bno},
+      #{id},
+      #{name},
+      #{msg},
+      (SELECT NVL(MAX(group_id)+1,1) FROM movie_reply)
+    )
+  </insert>
+  
+  <select id="replyListData" resultType="ReplyVO" parameterType="int">
+    SELECT no,bno,id,name,msg,TO_CHAR(regdate,'YYYY-MM-DD HH24:MI:SS') as dbday,
+    group_tab FROM movie_reply 
+    WHERE bno=#{bno}
+    ORDER BY group_id DESC , group_step ASC
+  </select>
+  
+  <!-- 
+                         no  group_id   group_step  group_tab  root  depth
+        AAAAAA            1     1          0            0              3
+          =>OOOOOOO      8     1          1            1              0
+          =>KKKKKKK       7     1          2            1              0
+          =>BBBBBB        2     1          3            1              1
+          
+           =>CCCCCCC      3     1          4            2              1
+            =>FFFFFFF     5     1          5            3              0
+          
+        DDDDDD            4     2          0            0              1
+          => GGGGGGG      6     2          1            1              0
+          => KKKKKK       9     2          1            1
+   -->
+  <select id="replyParentData" parameterType="int" resultType="ReplyVO">
+   SELECT group_id,group_step,group_tab
+   FROM movie_reply
+   WHERE no=#{no}
+  </select>
+  <update id="replyStepIncrement" parameterType="ReplyVO">
+    UPDATE movie_reply SET
+    group_step=group_step+1
+    WHERE group_id=#{group_id} AND group_step>#{group_step}
+  </update>
+  <insert id="resplyReplyInsert" parameterType="ReplyVO">
+    <selectKey keyProperty="no" resultType="int" order="BEFORE">
+      SELECT NVL(MAX(no)+1,1) as no FROM movie_reply
+    </selectKey>
+    INSERT INTO movie_reply(no,bno,id,name,msg,group_id,group_step,group_tab,root,depth) VALUES(
+      #{no},
+      #{bno},
+      #{id},
+      #{name},
+      #{msg},
+      #{group_id},
+      #{group_step},
+      #{group_tab},
+      #{root},
+      0
+    )
+  </insert>
+  <update id="replyDepthIncrement" parameterType="int">
+    UPDATE movie_reply SET
+    depth=depth+1
+    WHERE no=#{no}
+  </update>
+  
+  <update id="replyUpdate" parameterType="ReplyVO">
+  	UPDATE movie_reply SET
+  	msg=${msg}
+  	WHERE no=${no}
+  </update>
+  
+  <!-- 삭제 -->
+  <select id="replyInfoData" resultType="ReplyVO" parameterType="int">
+  	SELECT depth,root FROM movie_reply
+  	WHERE no=#{no}
+  </select>
+  <!-- depth=0 -->
+  <delete id="replyDelete" parameterType="int">
+  	DELETE FROM movie_reply
+  	WHERE no=#{no}
+  </delete>
+  <!-- depth!=0 -->
+  <update id="replyMsgUpdate" parameterType="int">
+  	UPDATE movie_reply SET
+  	msg='관리자가 삭제한 댓글입니다'
+  	WHERE no=#{no}
+  </update>
+  
+  <update id="replyDepthDecrement" parameterType="int">
+  	UPDATE movie_reply SET
+  	depth=depth-1
+  	WHERE no=#{no}
+  </update>
+  
+  <select id="replyCount" resultType="int" parameterType="int">
+  	SELECT COUNT(*) FROM movie_reply
+  	WHERE bno=#{bno}
+  </select>
+  
+</mapper>
+
